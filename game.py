@@ -51,6 +51,7 @@ def _spawn_child(state: GameState, house, parent_a: Character, parent_b: Charact
         martial=avg_stat(parent_a.martial, parent_b.martial),
         stewardship=avg_stat(parent_a.stewardship, parent_b.stewardship),
         intrigue=avg_stat(parent_a.intrigue, parent_b.intrigue),
+        parent_ids=[parent_a.id, parent_b.id],
     )
     house.members[child.id] = child
     parent_a.children_ids.append(child.id)
@@ -162,14 +163,8 @@ def run_season(state: GameState) -> None:
         state.turn_log.append(line)
         actions_left -= 1
 
-    ai_pool = state.ai_houses()
-    if ai_pool:
-        narrate_count = min(random.randint(1, 2), len(ai_pool))
-        narrated_ids = {h.id for h in random.sample(ai_pool, narrate_count)}
-        for house in ai_pool:
-            line = ai.take_ai_turn(state, house)
-            if house.id in narrated_ids:
-                state.turn_log.append(line)
+    for house in state.ai_houses():
+        state.turn_log.append(ai.take_ai_turn(state, house))
 
     crown_line = crown.maybe_act(state)
     if crown_line:

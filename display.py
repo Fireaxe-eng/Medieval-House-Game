@@ -11,6 +11,7 @@ ACTION_MENU = [
     "Scheme against a rival",
     "Manage the household",
     "Send an envoy",
+    "View the family tree",
     "End turn early",
 ]
 
@@ -92,6 +93,58 @@ def show_status(state: GameState) -> None:
         print(f"  House {house.name}: {label} ({rel:+d}){tag_text}")
 
 
+def show_family_tree(state: GameState) -> None:
+    house = state.player_house()
+    gen_cache: dict[str, int] = {}
+
+    def generation(char) -> int:
+        if char.id in gen_cache:
+            return gen_cache[char.id]
+        gen_cache[char.id] = 0  # guard against any accidental cycle
+        parents = [state.find_character(pid) for pid in char.parent_ids]
+        parents = [p for p in parents if p is not None]
+        gen = 0 if not parents else 1 + max(generation(p) for p in parents)
+        gen_cache[char.id] = gen
+        return gen
+
+    members = sorted(house.members.values(), key=lambda c: (generation(c), c.birth_year))
+
+    print(f"\n{'=' * 64}")
+    print(f"The Family of House {house.name} -- {len(members)} member(s) on record")
+    print("=" * 64)
+
+    current_gen = None
+    for char in members:
+        gen = generation(char)
+        if gen != current_gen:
+            current_gen = gen
+            label = "Founding Generation" if gen == 0 else f"Generation {gen}"
+            print(f"\n-- {label} --")
+
+        if char.id == house.ruler_id:
+            role = "current ruler"
+        elif char.alive:
+            role = "living"
+        else:
+            role = f"died {char.death_year}"
+        age_text = f"age {char.age(state.year)}" if char.alive else f"lived {char.death_year - char.birth_year} years"
+
+        spouse = state.find_character(char.spouse_id) if char.spouse_id else None
+        spouse_text = ""
+        if spouse:
+            born_elsewhere = spouse.house_id != house.id
+            origin = f", House {state.houses[spouse.house_id].name}" if born_elsewhere and spouse.house_id in state.houses else ""
+            spouse_text = f" -- wed to {spouse.name}{origin}"
+
+        parents = [state.find_character(pid) for pid in char.parent_ids]
+        parent_names = [p.name for p in parents if p is not None]
+        parent_text = f" -- child of {' & '.join(parent_names)}" if parent_names else ""
+
+        print(f"  {char.name} (b.{char.birth_year}, {role}, {age_text}){spouse_text}{parent_text}")
+
+    print("=" * 64)
+
+
 def pick_target_house(state: GameState) -> House | None:
     player = state.player_house()
     others = [h for h in state.other_houses(player.id) if not h.extinct]
@@ -117,10 +170,15 @@ def prompt_pending_proposal(state: GameState) -> str | None:
 
 
 def show_menu_and_resolve(state: GameState, actions_left: int) -> str | None:
-    print(f"\nActions remaining this season: {actions_left}")
-    choice = choose_from_list("What will you do?", ACTION_MENU)
-    if choice is None or choice == 5:
-        return None
+    while True:
+        print(f"\nActions remaining this season: {actions_left}")
+        choice = choose_from_list("What will you do?", ACTION_MENU)
+        if choice is None or choice == 6:
+            return None
+        if choice == 5:  # view family tree -- free look, doesn't cost an action
+            show_family_tree(state)
+            continue
+        break
 
     player = state.player_house()
 

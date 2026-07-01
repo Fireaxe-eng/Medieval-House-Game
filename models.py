@@ -52,6 +52,7 @@ class Character:
     intrigue: int = 10
     spouse_id: str | None = None
     children_ids: list[str] = field(default_factory=list)
+    parent_ids: list[str] = field(default_factory=list)
     alive: bool = True
 
     def age(self, current_year: int) -> int:
